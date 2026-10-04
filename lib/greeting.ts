@@ -1,3 +1,5 @@
+// lib/greeting.ts
+
 export function getGreeting(date = new Date()): string {
   const hour = date.getHours();
   if (hour >= 5 && hour < 12) return 'Buenos días';
