@@ -1,127 +1,112 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { ArrowLeft, Save } from 'lucide-react-native';
-import { addProducto } from '@/lib/store';
-import { getTheme } from '@/lib/theme';
+import { View, Text, Alert, ScrollView } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Save, Trash2 } from 'lucide-react-native';
+import { addProducto, updateProducto, deleteProducto, getProducto } from '@/lib/store';
+import { useTheme } from '@/lib/ThemeContext';
+import { Screen, TopBar, LabeledInput, PrimaryButton } from '@/lib/ui';
 
 export default function AddProductScreen() {
-  const theme = getTheme();
-  const [nombre, setNombre] = useState('');
-  const [categoria, setCategoria] = useState('');
-  const [stock, setStock] = useState('');
-  const [stockMinimo, setStockMinimo] = useState('');
+  const { theme } = useTheme();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const existente = id ? getProducto(id) : undefined;
+  const editando = !!existente;
 
-  const titleColor = theme.isDay ? 'text-[#060439]' : 'text-white';
+  const [nombre, setNombre] = useState(existente?.nombre ?? '');
+  const [categoria, setCategoria] = useState(existente?.categoria ?? '');
+  const [stock, setStock] = useState(existente ? String(existente.stock) : '');
+  const [stockMinimo, setStockMinimo] = useState(existente ? String(existente.minimo) : '');
+  const [error, setError] = useState<string | null>(null);
 
   const handleGuardar = () => {
     if (!nombre.trim() || !categoria.trim() || !stock.trim()) {
-      Alert.alert('Campos incompletos', 'Por favor completa al menos el nombre, la categoría y el stock.');
+      setError('Completa al menos el nombre, la categoría y el stock.');
+      return;
+    }
+    const stockNum = parseInt(stock, 10);
+    const minimoNum = parseInt(stockMinimo, 10) || 0;
+    if (isNaN(stockNum) || stockNum < 0 || minimoNum < 0) {
+      setError('El stock debe ser un número válido (0 o más).');
       return;
     }
 
-    addProducto({
+    const datos = {
       nombre: nombre.trim(),
       categoria: categoria.trim(),
-      stock: parseInt(stock, 10) || 0,
-      minimo: parseInt(stockMinimo, 10) || 0,
-    });
+      stock: stockNum,
+      minimo: minimoNum,
+    };
 
-    Alert.alert('¡Éxito!', `El producto "${nombre.trim()}" se ha agregado al inventario.`, [
-      { text: 'OK', onPress: () => router.back() },
+    if (existente) {
+      updateProducto(existente.id, datos);
+    } else {
+      addProducto(datos);
+    }
+    Alert.alert(
+      '¡Listo!',
+      editando ? 'Producto actualizado.' : `"${datos.nombre}" se agregó al inventario.`,
+      [{ text: 'OK', onPress: () => router.back() }]
+    );
+  };
+
+  const handleEliminar = () => {
+    if (!existente) return;
+    Alert.alert('Eliminar producto', `¿Seguro que quieres eliminar "${existente.nombre}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: () => {
+          deleteProducto(existente.id);
+          router.back();
+        },
+      },
     ]);
   };
 
   return (
-    <LinearGradient colors={theme.gradientColors} style={{ flex: 1 }}>
-      <SafeAreaView className="flex-1">
-        {/* Barra superior */}
-        <View
-          className="flex-row items-center justify-between px-6 py-4 border-b border-white/20"
-          style={{ backgroundColor: theme.cardBg }}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="w-10 h-10 bg-white/20 rounded-xl items-center justify-center">
-            <ArrowLeft size={20} color={theme.textMain} />
-          </TouchableOpacity>
-          <Text className={`text-lg font-bold ${titleColor}`}>Nuevo Producto</Text>
-          <TouchableOpacity
-            onPress={handleGuardar}
-            className="w-10 h-10 rounded-xl items-center justify-center"
-            style={{ backgroundColor: theme.ctaBg }}>
-            <Save size={20} color={theme.ctaText} />
-          </TouchableOpacity>
+    <Screen>
+      <TopBar title={editando ? 'Editar Producto' : 'Nuevo Producto'} />
+      <ScrollView className="flex-1 px-6 py-6" keyboardShouldPersistTaps="handled">
+        <Text className="text-lg font-bold mb-6" style={{ color: theme.textMain }}>
+          Información del producto
+        </Text>
+
+        <LabeledInput label="Nombre del producto" placeholder="Ej: Laptop HP ProBook" value={nombre} onChangeText={setNombre} />
+        <LabeledInput label="Categoría" placeholder="Ej: Electrónica, Accesorios" value={categoria} onChangeText={setCategoria} />
+
+        <View className="flex-row justify-between">
+          <View className="w-[48%]">
+            <LabeledInput label="Stock actual" placeholder="0" keyboardType="numeric" value={stock} onChangeText={setStock} />
+          </View>
+          <View className="w-[48%]">
+            <LabeledInput label="Stock mínimo" placeholder="0" keyboardType="numeric" value={stockMinimo} onChangeText={setStockMinimo} />
+          </View>
         </View>
 
-        <ScrollView
-          className="flex-1 px-6 py-6"
-          keyboardShouldPersistTaps="handled">
-          <Text className={`text-lg font-bold mb-6 ${titleColor}`}>Información del producto</Text>
-
-          <View className="mb-4">
-            <Text className={`text-sm font-semibold mb-2 ${titleColor}`}>Nombre del producto</Text>
-            <TextInput
-              className="rounded-xl border border-white/30 px-4 h-14 text-[15px]"
-              style={{ backgroundColor: theme.inputBg, color: theme.textMain }}
-              placeholder="Ej: Laptop HP ProBook"
-              placeholderTextColor="#94A3B8"
-              value={nombre}
-              onChangeText={setNombre}
-            />
+        {error && (
+          <View
+            className="rounded-xl px-4 py-3 mb-2 border"
+            style={{ backgroundColor: theme.alertBg, borderColor: theme.alertText }}>
+            <Text className="text-sm text-center font-medium" style={{ color: theme.alertText }}>{error}</Text>
           </View>
+        )}
 
-          <View className="mb-4">
-            <Text className={`text-sm font-semibold mb-2 ${titleColor}`}>Categoría</Text>
-            <TextInput
-              className="rounded-xl border border-white/30 px-4 h-14 text-[15px]"
-              style={{ backgroundColor: theme.inputBg, color: theme.textMain }}
-              placeholder="Ej: Electrónica, Accesorios"
-              placeholderTextColor="#94A3B8"
-              value={categoria}
-              onChangeText={setCategoria}
-            />
-          </View>
-
-          <View className="flex-row justify-between mb-4">
-            <View className="w-[48%]">
-              <Text className={`text-sm font-semibold mb-2 ${titleColor}`}>Stock actual</Text>
-              <TextInput
-                className="rounded-xl border border-white/30 px-4 h-14 text-[15px]"
-                style={{ backgroundColor: theme.inputBg, color: theme.textMain }}
-                placeholder="0"
-                placeholderTextColor="#94A3B8"
-                keyboardType="numeric"
-                value={stock}
-                onChangeText={setStock}
-              />
-            </View>
-            <View className="w-[48%]">
-              <Text className={`text-sm font-semibold mb-2 ${titleColor}`}>Stock mínimo</Text>
-              <TextInput
-                className="rounded-xl border border-white/30 px-4 h-14 text-[15px]"
-                style={{ backgroundColor: theme.inputBg, color: theme.textMain }}
-                placeholder="0"
-                placeholderTextColor="#94A3B8"
-                keyboardType="numeric"
-                value={stockMinimo}
-                onChangeText={setStockMinimo}
-              />
-            </View>
-          </View>
-
-          <TouchableOpacity
-            onPress={handleGuardar}
-            className="rounded-xl h-14 items-center justify-center mt-6 flex-row shadow-lg"
-            style={{ backgroundColor: theme.ctaBg }}>
-            <Save size={20} color={theme.ctaText} />
-            <Text className="text-base font-bold ml-2" style={{ color: theme.ctaText }}>
-              Guardar Producto
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    </LinearGradient>
+        <PrimaryButton
+          label={editando ? 'Guardar cambios' : 'Guardar producto'}
+          onPress={handleGuardar}
+          icon={<Save size={20} color={theme.ctaText} />}
+        />
+        {editando && (
+          <PrimaryButton
+            label="Eliminar producto"
+            variant="danger"
+            onPress={handleEliminar}
+            icon={<Trash2 size={20} color={theme.alertText} />}
+          />
+        )}
+        <View className="h-10" />
+      </ScrollView>
+    </Screen>
   );
 }
