@@ -1,188 +1,203 @@
- import { useState, ReactNode } from 'react';
+ import { useState, useCallback } from 'react';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useFocusEffect } from 'expo-router';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  KeyboardTypeOptions,
-} from 'react-native';
-import { router } from 'expo-router';
-import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react-native';
-import type { LucideIcon } from 'lucide-react-native';
-import { getRandomPhrase } from '@/lib/theme';
-import { useTheme } from '@/lib/ThemeContext';
-import { Screen, ThemeToggle, PrimaryButton } from '@/lib/ui';
+  LogOut,
+  Sun,
+  Moon,
+  Sunset,
+  Package,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  History,
+  AlertTriangle,
+} from 'lucide-react-native';
+import { getGreeting } from '@/lib/greeting';
+import { getTheme, getRandomPhrase } from '@/lib/theme';
+import { getProductos } from '@/lib/store';
 
-// Formato válido: algo@dominio.com (sin espacios, con @ y un punto después)
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export default function HomeScreen() {
+  const theme = getTheme();
+  const greeting = getGreeting();
+  const hour = new Date().getHours();
+  const isMorning = hour >= 5 && hour < 12;
+  const isAfternoon = hour >= 12 && hour < 20;
+  const Icon = isMorning ? Sun : isAfternoon ? Sunset : Moon;
 
-interface FieldProps {
-  icon: LucideIcon;
-  placeholder: string;
-  value: string;
-  onChangeText: (t: string) => void;
-  secureTextEntry?: boolean;
-  keyboardType?: KeyboardTypeOptions;
-  right?: ReactNode;
-}
+  const [total, setTotal] = useState(0);
+  const [bajo, setBajo] = useState(0);
 
-function Field({ icon: Icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, right }: FieldProps) {
-  const { theme } = useTheme();
-  const [focused, setFocused] = useState(false);
-  return (
-    <View
-      className="flex-row items-center rounded-xl border px-4 h-14 mb-4"
-      style={{
-        backgroundColor: theme.inputBg,
-        borderColor: focused ? theme.accent : theme.cardBorder,
-      }}>
-      <Icon size={18} color={theme.inputIcon} />
-      <TextInput
-        className="flex-1 ml-3 text-[15px] font-medium"
-        style={{ color: theme.inputText }}
-        placeholder={placeholder}
-        placeholderTextColor={theme.placeholder}
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry={secureTextEntry}
-        keyboardType={keyboardType}
-        autoCapitalize="none"
-        autoCorrect={false}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-      />
-      {right}
-    </View>
+  useFocusEffect(
+    useCallback(() => {
+      const lista = getProductos();
+      setTotal(lista.length);
+      setBajo(lista.filter((p) => p.stock <= p.minimo).length);
+    }, [])
   );
-}
 
-export default function AuthScreen() {
-  const { theme } = useTheme();
-  const [isLogin, setIsLogin] = useState(true);
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [frase] = useState(getRandomPhrase);
-
-  function handleSubmit() {
-    setError(null);
-    const hayVacios = isLogin
-      ? !email.trim() || !password
-      : !nombre.trim() || !email.trim() || !password || !confirmPassword;
-
-    if (hayVacios) {
-      setError('Por favor completa todos los campos.');
-      return;
-    }
-    if (!EMAIL_REGEX.test(email.trim())) {
-      setError('Ingresa un correo válido, por ejemplo: nombre@correo.com');
-      return;
-    }
-    if (!isLogin && password !== confirmPassword) {
-      setError('Las contraseñas no coinciden.');
-      return;
-    }
-    router.replace('/home');
-  }
+  const titleColor = theme.isDay ? 'text-[#060439]' : 'text-white';
+  const subColor = theme.isDay ? 'text-[#5A47C4]' : 'text-[#A9A5F3]';
 
   return (
-    <Screen>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-        <View className="flex-row justify-end px-6 pt-2">
-          <ThemeToggle />
-        </View>
-        <ScrollView contentContainerClassName="flex-grow justify-center" keyboardShouldPersistTaps="handled">
-          <View className="w-full max-w-[400px] self-center px-6 py-4">
-            {/* Header */}
-            <View className="items-center mb-8">
-              <View
-                className="w-16 h-16 rounded-2xl items-center justify-center mb-4 border"
-                style={{ backgroundColor: theme.iconBg, borderColor: theme.cardBorder }}>
-                <Text className="text-2xl font-bold" style={{ color: theme.accent }}>I360</Text>
-              </View>
-              <Text className="text-3xl font-bold mb-1" style={{ color: theme.textMain }}>Bienvenido</Text>
-              <Text className="text-sm font-medium" style={{ color: theme.textSub }}>
-                {isLogin ? 'Inicia sesión para continuar' : 'Crea tu cuenta en Inventario360'}
-              </Text>
-            </View>
+    <LinearGradient colors={theme.gradientColors} style={{ flex: 1 }}>
+      <SafeAreaView className="flex-1">
+        <ScrollView className="flex-1 w-full max-w-[720px] self-center px-6 py-8">
 
-            {/* Frase */}
-            <View
-              className="rounded-xl p-3 mb-6 border"
-              style={{ backgroundColor: theme.cardBg, borderColor: theme.cardBorder }}>
-              <Text className="text-center text-xs font-medium" style={{ color: theme.textSub }}>{frase}</Text>
-            </View>
-
-            {!isLogin && <Field icon={User} placeholder="Tu nombre" value={nombre} onChangeText={setNombre} />}
-
-            <Field
-              icon={Mail}
-              placeholder="tucorreo@ejemplo.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-            />
-
-            <Field
-              icon={Lock}
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              right={
-                <TouchableOpacity onPress={() => setShowPassword((s) => !s)}>
-                  {showPassword ? (
-                    <EyeOff size={18} color={theme.inputIcon} />
-                  ) : (
-                    <Eye size={18} color={theme.inputIcon} />
-                  )}
-                </TouchableOpacity>
-              }
-            />
-
-            {!isLogin && (
-              <Field
-                icon={Lock}
-                placeholder="Confirmar contraseña"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showPassword}
-              />
-            )}
-
-            {error && (
-              <View
-                className="rounded-xl px-4 py-3 mb-4 border"
-                style={{ backgroundColor: theme.alertBg, borderColor: theme.alertText }}>
-                <Text className="text-sm text-center font-medium" style={{ color: theme.alertText }}>{error}</Text>
-              </View>
-            )}
-
-            <PrimaryButton label={isLogin ? 'Iniciar sesión' : 'Registrarse'} onPress={handleSubmit} />
-
-            <View className="flex-row justify-center mt-6">
-              <Text className="text-sm" style={{ color: theme.textSub }}>
-                {isLogin ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setIsLogin(!isLogin);
-                  setError(null);
-                }}>
-                <Text className="text-sm font-bold" style={{ color: theme.accent }}>
-                  {isLogin ? 'Regístrate' : 'Inicia sesión'}
+          <View className="flex-row items-center justify-between mb-8">
+            <View className="flex-row items-center">
+              <View className="w-10 h-10 bg-white/20 rounded-xl items-center justify-center border border-white/30">
+                <Text className={`text-sm font-bold ${theme.isDay ? 'text-[#1016A5]' : 'text-white'}`}>
+                  I360
                 </Text>
-              </TouchableOpacity>
+              </View>
+              <Text className={`text-base font-bold ml-3 ${titleColor}`}>
+                INVENTARIO360
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => router.replace('/')}
+              className="w-10 h-10 bg-white/20 border border-white/30 rounded-xl items-center justify-center">
+              <LogOut size={18} color="#FB7185" />
+            </TouchableOpacity>
+          </View>
+
+          <View className="items-center mb-8">
+            <View className="w-16 h-16 bg-white/20 rounded-2xl items-center justify-center mb-4 border border-white/30">
+              <Icon size={30} color={theme.isDay ? '#1016A5' : '#A9A5F3'} />
+            </View>
+
+            <Text className={`text-sm font-semibold mb-1 ${subColor}`}>
+              {greeting}
+            </Text>
+
+            <Text className={`text-3xl font-bold text-center ${titleColor}`}>
+              Panel de Control
+            </Text>
+          </View>
+
+          <View className="bg-white/10 rounded-xl p-3 mb-6 border border-white/20">
+            <Text
+              className={`text-center text-xs font-medium ${
+                theme.isDay ? 'text-[#1016A5]' : 'text-white'
+              }`}>
+              {getRandomPhrase()}
+            </Text>
+          </View>
+
+          <View className="flex-row justify-between mb-6">
+            <View
+              className="rounded-2xl p-4 w-[48%] border border-white/20"
+              style={{ backgroundColor: theme.cardBg }}>
+              <Text className={`text-xs font-bold mb-1 ${subColor}`}>
+                TOTAL PRODUCTOS
+              </Text>
+
+              <Text className={`text-3xl font-bold ${titleColor}`}>
+                {total}
+              </Text>
+            </View>
+
+            <View
+              className="rounded-2xl p-4 w-[48%] border border-white/20"
+              style={{ backgroundColor: theme.alertBg }}>
+              <View className="flex-row items-center mb-1">
+                <AlertTriangle size={14} color={theme.alertText} />
+
+                <Text
+                  className="text-xs font-bold ml-1"
+                  style={{ color: theme.alertText }}>
+                  STOCK BAJO
+                </Text>
+              </View>
+
+              <Text
+                className="text-3xl font-bold"
+                style={{ color: theme.alertText }}>
+                {bajo}
+              </Text>
             </View>
           </View>
+
+          <Text className={`text-lg font-bold mb-4 ${titleColor}`}>
+            Gestión de Inventario
+          </Text>
+
+          <View className="flex-row flex-wrap justify-between">
+
+            <TouchableOpacity
+              onPress={() => router.push('/products')}
+              className="p-4 rounded-2xl w-[48%] mb-4 border border-white/20"
+              style={{ backgroundColor: theme.cardBg }}>
+              <View className="w-12 h-12 bg-white/20 rounded-xl items-center justify-center mb-3">
+                <Package size={24} color={theme.accent} />
+              </View>
+
+              <Text className={`text-base font-bold mb-1 ${titleColor}`}>
+                Productos
+              </Text>
+
+              <Text className={`text-xs ${subColor}`}>
+                Ver y editar inventario
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push('/movimiento?tipo=entrada')}
+              className="p-4 rounded-2xl w-[48%] mb-4 border border-white/20"
+              style={{ backgroundColor: theme.cardBg }}>
+              <View className="w-12 h-12 bg-white/20 rounded-xl items-center justify-center mb-3">
+                <ArrowUpCircle size={24} color={theme.accent} />
+              </View>
+
+              <Text className={`text-base font-bold mb-1 ${titleColor}`}>
+                Entradas
+              </Text>
+
+              <Text className={`text-xs ${subColor}`}>
+                Registrar mercadería
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push('/movimiento?tipo=salida')}
+              className="p-4 rounded-2xl w-[48%] mb-4 border border-white/20"
+              style={{ backgroundColor: theme.cardBg }}>
+              <View className="w-12 h-12 bg-white/20 rounded-xl items-center justify-center mb-3">
+                <ArrowDownCircle size={24} color="#FB7185" />
+              </View>
+
+              <Text className={`text-base font-bold mb-1 ${titleColor}`}>
+                Salidas
+              </Text>
+
+              <Text className={`text-xs ${subColor}`}>
+                Registrar ventas
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push('/historial')}
+              className="p-4 rounded-2xl w-[48%] mb-4 border border-white/20"
+              style={{ backgroundColor: theme.cardBg }}>
+              <View className="w-12 h-12 bg-white/20 rounded-xl items-center justify-center mb-3">
+                <History size={24} color={theme.accent} />
+              </View>
+
+              <Text className={`text-base font-bold mb-1 ${titleColor}`}>
+                Historial
+              </Text>
+
+              <Text className={`text-xs ${subColor}`}>
+                Registro de movimientos
+              </Text>
+            </TouchableOpacity>
+
+          </View>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </Screen>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
