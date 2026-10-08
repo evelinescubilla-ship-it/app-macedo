@@ -16,12 +16,18 @@
       "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [
+        "plugins": [
       "expo-router",
       "expo-font",
       "expo-web-browser",
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Inventario360 usa la cámara para escanear códigos de barras."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

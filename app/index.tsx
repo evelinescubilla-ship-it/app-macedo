@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
   KeyboardTypeOptions,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -14,7 +15,13 @@ import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { getRandomPhrase } from '@/lib/theme';
 import { useTheme } from '@/lib/ThemeContext';
+import { abrirSesion, restaurarSesion } from '@/lib/store';
+import { saveUser, saveNombre, getNombre } from '@/lib/session';
+import { login, signup, checkHealth } from '@/services/auth';
 import { Screen, ThemeToggle, PrimaryButton } from '@/lib/ui';
+
+// Formato válido: algo@dominio.com (sin espacios, con @ y un punto después)
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface FieldProps {
   icon: LucideIcon;
@@ -65,18 +72,49 @@ export default function AuthScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [restaurando, setRestaurando] = useState(true);
+  const [servidor, setServidor] = useState<'probando' | 'ok' | 'error'>('probando');
   const [frase] = useState(getRandomPhrase);
 
-  function handleSubmit() {
-    setError(null);
-    if (isLogin) {
-      if (!email.trim() || !password) {
-        setError('Por favor completa todos los campos.');
-        return;
+  // Al abrir: retoma la sesión guardada y comprueba que el backend esté activo
+  useEffect(() => {
+    let activo = true;
+    (async () => {
+      const hayServidor = await checkHealth();
+      if (activo) setServidor(hayServidor ? 'ok' : 'error');
+      const entro = await restaurarSesion();
+      if (!activo) return;
+      if (entro) {
+        router.replace('/home');
+      } else {
+        setRestaurando(false);
       }
-    } else {
-      if (!nombre.trim() || !email.trim() || !password || !confirmPassword) {
-        setError('Por favor completa todos los campos.');
+    })();
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  async function handleSubmit() {
+    setError(null);
+    setMensaje(null);
+    const hayVacios = isLogin
+      ? !email.trim() || !password
+      : !nombre.trim() || !email.trim() || !password || !confirmPassword;
+
+    if (hayVacios) {
+      setError('Por favor completa todos los campos.');
+      return;
+    }
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setError('Ingresa un correo válido, por ejemplo: nombre@correo.com');
+      return;
+    }
+    if (!isLogin) {
+      if (password.length < 8 || password.length > 72) {
+        setError('La contraseña debe tener entre 8 y 72 caracteres.');
         return;
       }
       if (password !== confirmPassword) {
@@ -84,8 +122,54 @@ export default function AuthScreen() {
         return;
       }
     }
-    router.replace('/home');
+
+    try {
+      setLoading(true);
+      if (isLogin) {
+        const data = await login(email.trim(), password);
+        const nombreGuardado = await getNombre(email);
+        const sesion = {
+          id: data.user.id,
+          email: data.user.email,
+          nombre: nombreGuardado || data.user.email.split('@')[0],
+        };
+        await saveUser(sesion);
+        await abrirSesion(sesion);
+        router.replace('/home');
+      } else {
+        await signup(email.trim(), password);
+        await saveNombre(email, nombre);
+        setIsLogin(true);
+        setPassword('');
+        setConfirmPassword('');
+        setMensaje('¡Cuenta creada! Ahora inicia sesión con tu correo y contraseña.');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo completar la operación.');
+    } finally {
+      setLoading(false);
+    }
   }
+
+  if (restaurando) {
+    return (
+      <Screen>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={theme.accent} />
+          <Text className="text-sm mt-4" style={{ color: theme.textSub }}>Cargando tu sesión...</Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const colorServidor =
+    servidor === 'ok' ? theme.successText : servidor === 'error' ? theme.alertText : theme.textSub;
+  const textoServidor =
+    servidor === 'ok'
+      ? 'Servidor conectado'
+      : servidor === 'error'
+        ? 'Sin conexión con el servidor'
+        : 'Comprobando servidor...';
 
   return (
     <Screen>
@@ -127,7 +211,7 @@ export default function AuthScreen() {
 
             <Field
               icon={Lock}
-              placeholder="••••••••"
+              placeholder={isLogin ? '••••••••' : 'Contraseña (8 a 72 caracteres)'}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -152,6 +236,14 @@ export default function AuthScreen() {
               />
             )}
 
+            {mensaje && (
+              <View
+                className="rounded-xl px-4 py-3 mb-4 border"
+                style={{ backgroundColor: theme.successBg, borderColor: theme.successText }}>
+                <Text className="text-sm text-center font-medium" style={{ color: theme.successText }}>{mensaje}</Text>
+              </View>
+            )}
+
             {error && (
               <View
                 className="rounded-xl px-4 py-3 mb-4 border"
@@ -160,7 +252,11 @@ export default function AuthScreen() {
               </View>
             )}
 
-            <PrimaryButton label={isLogin ? 'Iniciar sesión' : 'Registrarse'} onPress={handleSubmit} />
+            <PrimaryButton
+              label={loading ? (isLogin ? 'Ingresando...' : 'Registrando...') : isLogin ? 'Iniciar sesión' : 'Registrarse'}
+              onPress={handleSubmit}
+              loading={loading}
+            />
 
             <View className="flex-row justify-center mt-6">
               <Text className="text-sm" style={{ color: theme.textSub }}>
@@ -170,15 +266,20 @@ export default function AuthScreen() {
                 onPress={() => {
                   setIsLogin(!isLogin);
                   setError(null);
+                  setMensaje(null);
                 }}>
                 <Text className="text-sm font-bold" style={{ color: theme.accent }}>
                   {isLogin ? 'Regístrate' : 'Inicia sesión'}
                 </Text>
               </TouchableOpacity>
             </View>
+
+            <Text className="text-xs text-center mt-6 font-semibold" style={{ color: colorServidor }}>
+              ● {textoServidor}
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
   );
-} 
+}

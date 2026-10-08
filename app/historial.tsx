@@ -45,7 +45,9 @@ export default function HistorialScreen() {
               </View>
               <View className="flex-1">
                 <Text className="text-base font-bold" style={{ color: theme.textMain }}>{m.productoNombre}</Text>
-                <Text className="text-xs" style={{ color: theme.textSub }}>{formatFecha(m.fecha)}</Text>
+                <Text className="text-xs" style={{ color: theme.textSub }}>
+                  {formatFecha(m.fecha)} · por {m.usuario}
+                </Text>
                 {m.nota !== '' && (
                   <Text className="text-xs mt-1" style={{ color: theme.textSub }}>{m.nota}</Text>
                 )}
